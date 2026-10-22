@@ -39,7 +39,7 @@ CM = 1 / 2.54                      # inches per cm
 SPEC_SIZE = (15 * CM, 10 * CM)     # spectra figure, 15 x 10 cm
 KIN_SIZE = (8 * CM, 5 * CM)        # kinetics figure, 8 x 5 cm
 SAVE_DPI = 600                     # output resolution
-PREVIEW_DPI = 150                  # GUI preview resolution
+PREVIEW_DPI = 100                  # GUI preview start dpi (auto-raised to fit the window)
 
 SPEC_COLORS = ["#2f6fdc", "#f28e2b", "#d62d20", "#3cbf6e", "#f5c518",
                "#8a2be2", "#22d3d3", "#8c564b", "#e377c2", "#7f7f7f"]
@@ -244,7 +244,7 @@ def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
         tt = np.linspace(t[m].min(), t[m].max(), 2)                 # straight line: 2 pts
         ax.plot(tt, r["k"] * tt + r["b"], "--", color=c, lw=0.9)
 
-    ax.set_title(f"{title} kinetics".strip(), loc="left", color="#555555", fontsize=9)
+    ax.set_title(f"{title} kinetics".strip(), loc="left", color="#555555", fontsize=9, pad=3)
     ax.set_xlabel("Time (min)", fontsize=8)
     ax.set_ylabel(YLABELS[(order, zero)], fontsize=8)
     ax.tick_params(labelsize=6.5)
@@ -254,7 +254,7 @@ def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
         ax.spines[s].set_visible(False)
     ax.legend(loc="best", fontsize=5.5, frameon=False, handletextpad=0.1,
               borderaxespad=0.2, labelspacing=0.2)
-    fig.tight_layout()
+    fig.tight_layout(pad=0.3)   # tight outer margins (8 x 5 cm is small)
     return fig, results
 
 
@@ -429,11 +429,27 @@ def run_gui():
     nb = ttk.Notebook(right)
     nb.pack(fill="both", expand=True)
     canvases = []
-    for fig, name in ((fig1, "Spectra"), (fig2, "Kinetics")):
+
+    def fit_to_tab(fig, cv, size_in):
+        """Return a <Configure> handler that raises the preview dpi so the graph fills
+        its tab while keeping the export aspect ratio (3:2 spectra, 8:5 kinetics).
+        Only the on-screen preview changes; saved files are rendered fresh at exact cm."""
+        def on_resize(event):
+            dpi = min((event.width - 16) / size_in[0], (event.height - 16) / size_in[1])
+            if dpi < 40 or abs(dpi - fig.dpi) < 3:      # tiny/unchanged: ignore (no loops)
+                return
+            fig.set_dpi(dpi)
+            cv.get_tk_widget().configure(width=int(size_in[0] * dpi),
+                                         height=int(size_in[1] * dpi))
+            cv.draw_idle()
+        return on_resize
+
+    for fig, name, size in ((fig1, "Spectra", SPEC_SIZE), (fig2, "Kinetics", KIN_SIZE)):
         tab = ttk.Frame(nb)
         nb.add(tab, text=name)
         cv = FigureCanvasTkAgg(fig, tab)
         cv.get_tk_widget().pack(anchor="nw", padx=6, pady=6)
+        tab.bind("<Configure>", fit_to_tab(fig, cv, size))
         canvases.append(cv)
 
     def clear_previews():
@@ -489,6 +505,8 @@ def run_gui():
     ttk.Button(left, text="Save PNGs + CSV", command=save).grid(row=i + 4, column=1)
     ttk.Label(left, textvariable=status, justify="left", wraplength=300).grid(
         row=i + 5, column=0, columnspan=2, sticky="w")
+    root.geometry("1300x800")     # fixed start size so the preview can't grow the window
+    root.minsize(900, 600)
     root.mainloop()
 
 
