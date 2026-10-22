@@ -32,6 +32,7 @@ import sys
 
 import numpy as np
 import matplotlib
+import matplotlib.ticker
 from matplotlib.figure import Figure
 
 # ------------------------------------------------------------------ constants
@@ -238,13 +239,32 @@ def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
         c = KIN_COLORS[j % len(KIN_COLORS)]
         lab = f"{wl_nm:g} nm" + (f", k={r['k']:.3g}" if show_k else "")
         t, y, m = r["t"], r["y"], r["mask"]
-        ax.plot(t[m], y[m], "o", color=c, ms=4, label=lab)          # points in the fit
+        ax.plot(t[m], y[m], "o", color=c, ms=4, label=lab, clip_on=False)          # points in the fit
         if not m.all():                                             # excluded: open circles
-            ax.plot(t[~m], y[~m], "o", mfc="white", mec=c, ms=4)
+            ax.plot(t[~m], y[~m], "o", mfc="white", mec=c, ms=4, clip_on=False)
         tt = np.linspace(t[m].min(), t[m].max(), 2)                 # straight line: 2 pts
         ax.plot(tt, r["k"] * tt + r["b"], "--", color=c, lw=0.9)
 
-    ax.set_title(f"{title} kinetics".strip(), loc="left", color="#555555", fontsize=9, pad=3)
+    # Axes hug the data: x from first to last time, y from lowest to highest value, so
+    # for a decay the t=0 dot is top-left and the last dot bottom-right (rising data:
+    # bottom-left / top-right). clip_on=False above keeps edge dots un-cropped.
+    t_all = np.concatenate([r["t"] for r in results])
+    y_all = np.concatenate([r["y"] for r in results])
+    ax.set_xlim(t_all.min(), t_all.max())
+    # ticks: every sampled time when there are few (0, 2.5, ... 15), so the axis visibly
+    # runs first -> last time; with many points keep automatic ticks but add both ends
+    ts = np.unique(t_all)
+    if len(ts) <= 8:
+        ax.set_xticks(ts)
+    else:
+        ax.set_xticks(np.unique(np.r_[ax.get_xticks()[(ax.get_xticks() > ts[0]) &
+                                                       (ax.get_xticks() < ts[-1])],
+                                      ts[0], ts[-1]]))
+    ax.set_xlim(ts[0], ts[-1])
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%g"))
+    if y_all.max() > y_all.min():
+        ax.set_ylim(y_all.min(), y_all.max())
+    ax.set_title(f"{title} kinetics".strip(), loc="left", color="#555555", fontsize=9, pad=6)
     ax.set_xlabel("Time (min)", fontsize=8)
     ax.set_ylabel(YLABELS[(order, zero)], fontsize=8)
     ax.tick_params(labelsize=6.5)
