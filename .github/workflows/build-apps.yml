@@ -1,0 +1,33 @@
+# Builds the Mac app and the Windows exe on GitHub's servers.
+# Location in your repo: .github/workflows/build-apps.yml
+# Run: GitHub repo > Actions tab > build-apps > Run workflow. Download from the run's Artifacts.
+name: build-apps
+on: workflow_dispatch
+jobs:
+  mac:
+    runs-on: macos-latest            # Apple Silicon -> arm64 app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"     # python.org build, includes Tk
+      - run: chmod +x build_mac.sh && ./build_mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UV-Vis-Kinetics-mac
+          path: dist/UV-Vis-Kinetics.zip
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy matplotlib pyinstaller
+      - run: pyinstaller --noconfirm --clean --windowed --onedir --name "UV-Vis Kinetics" --hidden-import matplotlib.backends.backend_tkagg --hidden-import PIL._tkinter_finder --exclude-module matplotlib.tests uvvis_kinetics.py
+      - run: Compress-Archive -Path "dist/UV-Vis Kinetics" -DestinationPath dist/UV-Vis-Kinetics-windows.zip
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UV-Vis-Kinetics-windows
+          path: dist/UV-Vis-Kinetics-windows.zip
