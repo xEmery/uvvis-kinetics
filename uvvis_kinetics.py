@@ -9,7 +9,8 @@ Input : 2-column text (wavelength nm, absorbance), optional header ending in
         '>>>>>Begin Spectral Data<<<<<'. Time (min) is read from the file name
         ('2.5 min' / '2_5_min'), or set by hand (GUI: double-click a file;
         CLI: --times 0,2.5,5,...  one value per file, in the order given).
-Output: <out>_spectra.png (15 x 10 cm), <out>_kinetics.png (8 x 5 cm), both 600 dpi,
+Output: <out>_spectra.png (15 x 10 cm, 3:2), <out>_kinetics.png (15 x 9.375 cm, 8:5),
+        both 600 dpi, same width and same text sizes (Arial),
         plus <out>_kinetics.csv (per-point values and fit results).
 Needs : numpy, matplotlib (+ tkinter for the GUI).
 
@@ -36,9 +37,22 @@ import matplotlib.ticker
 from matplotlib.figure import Figure
 
 # ------------------------------------------------------------------ constants
-CM = 1 / 2.54                      # inches per cm
-SPEC_SIZE = (15 * CM, 10 * CM)     # spectra figure, 15 x 10 cm
-KIN_SIZE = (8 * CM, 5 * CM)        # kinetics figure, 8 x 5 cm
+# Arial everywhere (falls back to the metric-identical Liberation Sans, then Helvetica /
+# DejaVu if Arial is not installed). Math text (ln(A/A0) etc.) uses the same family.
+matplotlib.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Liberation Sans", "Helvetica", "DejaVu Sans"],
+    "mathtext.fontset": "custom",
+    "mathtext.rm": "sans", "mathtext.it": "sans:italic", "mathtext.bf": "sans:bold",
+    "mathtext.cal": "sans", "mathtext.tt": "sans", "mathtext.sf": "sans",
+})
+
+CM = 1 / 2.54                          # inches per cm
+EXPORT_W = 15 * CM                     # both graphs export at this width
+SPEC_SIZE = (EXPORT_W, 10 * CM)        # spectra  3:2 -> 15 x 10 cm
+KIN_SIZE = (EXPORT_W, EXPORT_W * 5 / 8)  # kinetics 8:5 -> 15 x 9.375 cm
+# One set of text sizes (pt) for BOTH graphs, so text looks identical at equal width.
+FS_TITLE, FS_LABEL, FS_TICK, FS_LEGEND = 10, 9, 8, 7
 SAVE_DPI = 600                     # output resolution
 PREVIEW_DPI = 100                  # GUI preview start dpi (auto-raised to fit the window)
 
@@ -208,12 +222,12 @@ def make_spectra_fig(series, title, wmin, wmax, ymin=None, ymax=None, fig=None):
     ax.set_axisbelow(True)
     for s in ax.spines.values():
         s.set_linewidth(1.0)
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel("Wavelength (nm)", fontsize=9)
-    ax.set_ylabel("Absorbance (a.u.)", fontsize=9)
-    ax.tick_params(labelsize=8)
+    ax.set_title(title, fontsize=FS_TITLE)
+    ax.set_xlabel("Wavelength (nm)", fontsize=FS_LABEL)
+    ax.set_ylabel("Absorbance (a.u.)", fontsize=FS_LABEL)
+    ax.tick_params(labelsize=FS_TICK)
     leg = ax.legend(loc="upper right", frameon=True, edgecolor="black",
-                    fancybox=False, fontsize=6.5)
+                    fancybox=False, fontsize=FS_LEGEND)
     for txt, ln in zip(leg.get_texts(), ax.get_lines()):   # legend text in line colour
         txt.set_color(ln.get_color())
     fig.tight_layout()
@@ -223,7 +237,7 @@ def make_spectra_fig(series, title, wmin, wmax, ymin=None, ymax=None, fig=None):
 def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
                       baseline_nm=None, track=False, fit_range=None, show_k=True,
                       through_zero=True, fig=None):
-    """Rate-law scatter + fit line, 8 x 5 cm. peaks: [(label, nm)].
+    """Rate-law scatter + fit line, 15 x 9.375 cm (8:5). peaks: [(label, nm)].
     Returns (fig, [result dicts with label/wl added])."""
     fig = fig or Figure(figsize=KIN_SIZE, dpi=SAVE_DPI)
     fig.clf()
@@ -239,11 +253,11 @@ def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
         c = KIN_COLORS[j % len(KIN_COLORS)]
         lab = f"{wl_nm:g} nm" + (f", k={r['k']:.3g}" if show_k else "")
         t, y, m = r["t"], r["y"], r["mask"]
-        ax.plot(t[m], y[m], "o", color=c, ms=4, label=lab, clip_on=False)          # points in the fit
+        ax.plot(t[m], y[m], "o", color=c, ms=5, label=lab, clip_on=False)  # points in the fit
         if not m.all():                                             # excluded: open circles
-            ax.plot(t[~m], y[~m], "o", mfc="white", mec=c, ms=4, clip_on=False)
+            ax.plot(t[~m], y[~m], "o", mfc="white", mec=c, ms=5, clip_on=False)
         tt = np.linspace(t[m].min(), t[m].max(), 2)                 # straight line: 2 pts
-        ax.plot(tt, r["k"] * tt + r["b"], "--", color=c, lw=0.9)
+        ax.plot(tt, r["k"] * tt + r["b"], "--", color=c, lw=1.0)
 
     # Axes hug the data: x from first to last time, y from lowest to highest value, so
     # for a decay the t=0 dot is top-left and the last dot bottom-right (rising data:
@@ -264,17 +278,20 @@ def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
     ax.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%g"))
     if y_all.max() > y_all.min():
         ax.set_ylim(y_all.min(), y_all.max())
-    ax.set_title(f"{title} kinetics".strip(), loc="left", color="#555555", fontsize=9, pad=6)
-    ax.set_xlabel("Time (min)", fontsize=8)
-    ax.set_ylabel(YLABELS[(order, zero)], fontsize=8)
-    ax.tick_params(labelsize=6.5)
+    ax.set_title(f"{title} kinetics".strip(), loc="left", color="#555555", fontsize=FS_TITLE, pad=6)
+    ax.set_xlabel("Time (min)", fontsize=FS_LABEL)
+    ax.set_ylabel(YLABELS[(order, zero)], fontsize=FS_LABEL)
+    ax.tick_params(labelsize=FS_TICK)
     ax.grid(color="#d9d9d9", lw=0.8)
     ax.set_axisbelow(True)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    ax.legend(loc="best", fontsize=5.5, frameon=False, handletextpad=0.1,
-              borderaxespad=0.2, labelspacing=0.2)
-    fig.tight_layout(pad=0.3)   # tight outer margins (8 x 5 cm is small)
+    for name, sp in ax.spines.items():
+        if name in ("top", "right"):
+            sp.set_visible(False)
+        else:
+            sp.set_linewidth(1.0)                       # same weight as the spectra frame
+    ax.legend(loc="best", fontsize=FS_LEGEND, frameon=False, handletextpad=0.3,
+              borderaxespad=0.3, labelspacing=0.3)
+    fig.tight_layout(pad=0.4)   # tight outer margins
     return fig, results
 
 
@@ -407,8 +424,10 @@ def run_gui():
             refresh()
 
     lb.bind("<Double-Button-1>", edit_time)
-    ttk.Button(left, text="Add files...", command=add_files).grid(row=0, column=0)
-    ttk.Button(left, text="Remove selected", command=remove_sel).grid(row=0, column=1)
+    bar = ttk.Frame(left)                             # Add / Remove / Clear all
+    bar.grid(row=0, column=0, columnspan=2)
+    ttk.Button(bar, text="Add files...", command=add_files).pack(side="left")
+    ttk.Button(bar, text="Remove selected", command=remove_sel).pack(side="left")
     ttk.Label(left, text="double-click a file to edit its time").grid(
         row=2, column=0, columnspan=2)
 
@@ -477,6 +496,16 @@ def run_gui():
         for fig, cv in ((fig1, canvases[0]), (fig2, canvases[1])):
             fig.clf()
             cv.draw()
+
+    def clear_all():
+        """Remove every loaded spectrum and blank both graphs (settings are kept)."""
+        entries.clear()
+        refresh()
+        clear_previews()
+        status.set("")
+        last.clear()
+
+    ttk.Button(bar, text="Clear all", command=clear_all).pack(side="left")
 
     def plot():
         clear_previews()
