@@ -251,7 +251,7 @@ def make_kinetics_fig(series, title, peaks, order=1, zero=True, half_window=2.0,
         results.append(r)
 
         c = KIN_COLORS[j % len(KIN_COLORS)]
-        lab = f"{wl_nm:g} nm" + (f", k={r['k']:.3g}" if show_k else "")
+        lab = f"{wl_nm:g} nm" + (f", k={r['k']:.3g}, $R^2$={r['r2']:.3f}" if show_k else "")
         t, y, m = r["t"], r["y"], r["mask"]
         ax.plot(t[m], y[m], "o", color=c, ms=5, label=lab, clip_on=False)  # points in the fit
         if not m.all():                                             # excluded: open circles
@@ -448,7 +448,7 @@ def run_gui():
                  values=["0 (A)", "1 (ln A)", "2 (1/A)"]).grid(row=i, column=1)
     for r, (txt, var, col) in enumerate([("Zero at t=0", zero, 0),
                                          ("Track max in window", track, 1),
-                                         ("Show k on plot", showk, 0),
+                                         ("Show k, R\u00b2 on plot", showk, 0),
                                          ("Free intercept", free, 1)]):
         ttk.Checkbutton(left, text=txt, variable=var).grid(
             row=i + 1 + r // 2, column=col, sticky="w")

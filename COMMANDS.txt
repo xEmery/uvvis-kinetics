@@ -1,0 +1,10 @@
+To build the app:
+
+cd '/Users/emery/Documents/UV-Vis kinetics app'
+chmod +x build_mac.sh && ./build_mac.sh
+
+To push to github:
+cd '/Users/emery/Documents/UV-Vis kinetics app'
+git add -A
+git commit -m "update"
+git push
